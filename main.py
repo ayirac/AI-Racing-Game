@@ -18,22 +18,27 @@ class Car:
         self.rotation = 0.0
 
         self.drag_factor = 0.03
-
+        self.braking_factor = 0.05
         self.topSpeed = topSpeed
         self.topacceleration = topacceleration
+
+        self.recordings = []
+        self.recording = False
+        self.recordingLastTime = -1
+        self.recordingCoolDown = -1
         
         self.accelerationFac = accelerationFactor
-
         self.image = pygame.transform.rotate(pygame.transform.scale(pygame.image.load(image), (20, 35)), 90)
 
         self.rect = self.image.get_rect()
         self.rect.center = startPos
     
     def accelerate(self):
-        self.acceleration = max(self.acceleration + self.accelerationFac, self.topacceleration)  # Gradual change
+        self.acceleration = min(self.acceleration + self.accelerationFac, self.topacceleration)  # Gradual change
 
     def decelerate(self):
-        self.acceleration = max(self.acceleration - self.accelerationFac, 0) 
+        self.acceleration = max(-self.braking_factor, -self.topacceleration)
+
 
     # https://stackoverflow.com/questions/46525021/what-is-the-simplest-way-to-rotate-a-pygame-sprite-on-holding-a-button
     def turnLeft(self):  # Need to fuck with ang rotation & then each tick use it to change the cars  rotation based on the forces
@@ -42,28 +47,28 @@ class Car:
     def turnRight(self): 
         self.rotation = (self.rotation - 1) % 360
 
-    def updateacceleration(self):
-        print("Velocity:", self.velocity)
-        
-        print("Acceleration before:", self.acceleration) 
+    def updateAcceleration(self):
         if self.acceleration != 0:
-            drag = self.drag_factor * self.speed**2  # Square speed for gradual drag
-            if self.velocity < 0:  
-                drag *= -1  
-            print("Drag:", drag)  
-            if self.acceleration > 0:
-                self.acceleration -= drag  
+            drag = self.drag_factor
+            if self.acceleration > 0: 
+                self.acceleration = max(self.acceleration - drag, 0) 
             elif self.acceleration < 0:
-                self.acceleration += drag  
-            print("Acceleration after:", self.acceleration)   
+                self.acceleration = min(self.acceleration + drag, 0) 
                 
     def updateVelocity(self):
         self.velocity += self.acceleration
-        self.velocity = max(-self.topSpeed, min(self.velocity, self.topSpeed))  # Clamp velocity
-        if self.velocity > 0:
-            self.velocity = max(self.velocity - 1, 0)
+
+        # Apply Drag 
+        drag = self.drag_factor * self.speed**2  # Square the speed for realistic drag
+        if self.velocity > 0: 
+            self.velocity -= drag
+        elif self.velocity < 0:
+            self.velocity += drag  # Drag opposes the direction of motion
         
-        self.speed = abs(self.velocity)
+        # Clamp velocity
+        self.velocity = max(-self.topSpeed, min(self.velocity, self.topSpeed)) 
+        self.speed = abs(self.velocity) 
+        
 
     def updatePosition(self, walls):
         radians = math.radians(self.rotation)
@@ -80,6 +85,30 @@ class Car:
         self.pos = new_pos
         self.rect.center = self.pos
 
+        if (self.recording == True):
+            curTime = pygame.time.get_ticks()
+            if (self.recordingLastTime + 200 < curTime):
+                self.recordingLastTime = curTime
+                self.recordings.append((self.pos, self.rotation))
+
+    #def navigateToPos()
+
+    def startRecording(self):
+        curTime = pygame.time.get_ticks()
+        if self.recordingCoolDown + 600 < curTime:
+            self.recordingCoolDown = curTime
+            if self.recording:  # You can directly use `if self.recording:` instead of `if self.recording == True:`
+                with open("routes.txt", "a") as f:
+                    # Convert each tuple to a string representation
+                    recordings_str = ', '.join([str(pos) for pos in self.recordings])
+                    f.write(recordings_str + '\n')  # Add a newline after each recording
+                print("Recordings saved to routes.txt")
+                self.recording = False
+            else:
+                print("Recording started!")
+                self.recording = True
+
+
     def draw(self):
         rotated_image = pygame.transform.rotate(self.image, self.rotation)
         rotated_rect = rotated_image.get_rect(center=self.rect.center)
@@ -92,17 +121,6 @@ class Car:
         end_y = self.pos[1] - ray_length * math.sin(radians)
         
         intersection = None
-        #for wall in walls:
-           # intersection_point = wall.clipline(self.pos, (end_x, end_y))
-           # print("Wall:", wall, "Intersection Point:", intersection_point)
-           # if intersection_point:
-           #     intersection = intersection_point
-            #    break
-           # print("LO")
-
-        
-        #if intersection:
-            #print(f"YO YO YO {intersection}")
         pygame.draw.line(screen, (255, 0, 0), self.pos, (end_x, end_y), 2)
 
 
@@ -125,7 +143,12 @@ if __name__ == "__main__":
                     walls.append(rect)
     wallWidth = 150
     wallHeight = 30
-    c = Car('Chevy Cruze', 'images/car.png', 0.17, 18, 3, (1500, 900))
+    cars = []
+    c = Car('Chevy Cruze', 'images/car.png', 0.10, 8, 2, (1500, 900))
+    cars.append(c)
+    c1 = Car('Chevy Cruze', 'images/car.png', 0.10, 8, 2, (1500, 900))
+    cars.append(c1) 
+    
 
     # Game loop
     while True:
@@ -156,19 +179,22 @@ if __name__ == "__main__":
             c.turnLeft()
         elif keys[pygame.K_d]:
             c.turnRight()
+        elif keys[pygame.K_SPACE]:
+            c.startRecording()
 
         # Update & Finalize
-        c.updateacceleration()
+        c.updateAcceleration()
         c.updateVelocity()
         c.updatePosition(walls)
         
         # Draw
         screen.fill((255, 255, 255))
         screen.blit(surface, (0,0))
-        c.draw()
+
+        for cs in cars:
+            cs.draw()
         for w in walls:
             pygame.draw.rect(screen, (255, 0, 0), w)
-            c.raycast(walls)  # Draw raycast lines
+        c.raycast(walls)
         pygame.display.update()
-        #print(c.speed)
        
