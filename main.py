@@ -30,13 +30,10 @@ class Car:
         self.rect.center = startPos
     
     def accelerate(self):
-        self.acceleration += self.accelerationFac  # Gradual change
+        self.acceleration = max(self.acceleration + self.accelerationFac, self.topacceleration)  # Gradual change
 
     def decelerate(self):
-        if self.velocity > 0:
-            self.acceleration = max(self.acceleration - self.accelerationFac, 0)
-        elif self.velocity < 0:
-            self.acceleration = min(self.acceleration + self.accelerationFac, self.topacceleration)
+        self.acceleration = max(self.acceleration - self.accelerationFac, 0) 
 
     # https://stackoverflow.com/questions/46525021/what-is-the-simplest-way-to-rotate-a-pygame-sprite-on-holding-a-button
     def turnLeft(self):  # Need to fuck with ang rotation & then each tick use it to change the cars  rotation based on the forces
@@ -46,13 +43,14 @@ class Car:
         self.rotation = (self.rotation - 1) % 360
 
     def updateacceleration(self):
+        print("Velocity:", self.velocity)
+        
+        print("Acceleration before:", self.acceleration) 
         if self.acceleration != 0:
             drag = self.drag_factor * self.speed**2  # Square speed for gradual drag
             if self.velocity < 0:  
                 drag *= -1  
-            print("Velocity:", self.velocity)
             print("Drag:", drag)  
-            print("Acceleration before:", self.acceleration) 
             if self.acceleration > 0:
                 self.acceleration -= drag  
             elif self.acceleration < 0:
@@ -62,6 +60,9 @@ class Car:
     def updateVelocity(self):
         self.velocity += self.acceleration
         self.velocity = max(-self.topSpeed, min(self.velocity, self.topSpeed))  # Clamp velocity
+        if self.velocity > 0:
+            self.velocity = max(self.velocity - 1, 0)
+        
         self.speed = abs(self.velocity)
 
     def updatePosition(self, walls):
@@ -83,7 +84,26 @@ class Car:
         rotated_image = pygame.transform.rotate(self.image, self.rotation)
         rotated_rect = rotated_image.get_rect(center=self.rect.center)
         screen.blit(rotated_image, rotated_rect)
+
+    def raycast(self, walls):
+        ray_length = 250
+        radians = math.radians(self.rotation)
+        end_x = self.pos[0] + ray_length * math.cos(radians)
+        end_y = self.pos[1] - ray_length * math.sin(radians)
         
+        intersection = None
+        #for wall in walls:
+           # intersection_point = wall.clipline(self.pos, (end_x, end_y))
+           # print("Wall:", wall, "Intersection Point:", intersection_point)
+           # if intersection_point:
+           #     intersection = intersection_point
+            #    break
+           # print("LO")
+
+        
+        #if intersection:
+            #print(f"YO YO YO {intersection}")
+        pygame.draw.line(screen, (255, 0, 0), self.pos, (end_x, end_y), 2)
 
 
 if __name__ == "__main__":
@@ -148,6 +168,7 @@ if __name__ == "__main__":
         c.draw()
         for w in walls:
             pygame.draw.rect(screen, (255, 0, 0), w)
+            c.raycast(walls)  # Draw raycast lines
         pygame.display.update()
         #print(c.speed)
        
